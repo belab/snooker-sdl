@@ -8,18 +8,39 @@
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 400;
 const int BALL_RADIUS = 10;
-const float FRICTION = 0.9995f;
+const double FRICTION = 0.9995;
 const int TABLE_MARGIN = 60;
 const int POCKET_RADIUS = 20;
-const float TRIANGLE_START_X = SCREEN_WIDTH * 0.75f;
-const float TRIANGLE_START_Y = SCREEN_HEIGHT / 2.0f;
-const float SPACING = BALL_RADIUS * 2 + 2;
+const double TRIANGLE_START_X = SCREEN_WIDTH * 0.75;
+const double TRIANGLE_START_Y = SCREEN_HEIGHT / 2.0;
+const double SPACING = BALL_RADIUS * 2 + 2;
 
+struct Vec2d
+{
+	double x{}, y{};
+	constexpr double squaredLength() const {return dot(*this);}
+	constexpr double dot(const Vec2d& rhs) const {return x * rhs.x + y * rhs.y;}
+	constexpr Vec2d norm() const {return *this / std::sqrt(squaredLength());}
+	constexpr Vec2d operator+(const Vec2d& rhs) const {return Vec2d{x + rhs.x, y + rhs.y};};
+	constexpr Vec2d operator-(const Vec2d& rhs) const {return Vec2d{x - rhs.x, y - rhs.y};};
+	constexpr Vec2d operator*(double multiplier) const {return Vec2d{x * multiplier, y * multiplier};};
+	constexpr Vec2d operator/(double divisor) const {return Vec2d{x / divisor, y / divisor};};
+	constexpr Vec2d& operator+=(const Vec2d& rhs) {x += rhs.x; y += rhs.y; return *this;};
+	constexpr Vec2d& operator-=(const Vec2d& rhs) {x -= rhs.x; y -= rhs.y; return *this;};
+	constexpr Vec2d& operator*=(double multiplier) {x *= multiplier; y *= multiplier; return *this;};
+};
+
+struct Color
+{
+    Uint8 r{};
+    Uint8 g{};
+    Uint8 b{};
+};
 
 struct Ball {
-	float x, y;
-	float vx, vy;
-	SDL_Color color;
+	Vec2d pos;
+	Vec2d v;
+	Color color;
 	int points; // Scoring value of the ball
 	bool potted = false;
 	std::string name;
@@ -29,28 +50,28 @@ Ball createBall(const std::string& ballName)
 {
 	const std::unordered_map<std::string, Ball> balls =
 	{
-		{"Yellow Ball", Ball{SCREEN_WIDTH / 2.0f - 3 * SPACING, SCREEN_HEIGHT / 2.0f, 0, 0, {255, 255, 0}, 2, false, "Yellow Ball"}},
-		{"Green Ball", Ball{SCREEN_WIDTH / 2.0f - SPACING, TABLE_MARGIN + SPACING * 2, 0, 0, {0, 255, 0}, 3, false, "Green Ball"}},
-		{"Brown Ball", Ball{SCREEN_WIDTH / 2.0f - SPACING, SCREEN_HEIGHT - TABLE_MARGIN - SPACING * 2, 0, 0, {139, 69, 19}, 4, false, "Brown Ball"}},
-		{"Blue Ball", Ball{SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f, 0, 0, {0, 0, 255}, 5, false, "Blue Ball"}},
-		{"Pink Ball", Ball{TRIANGLE_START_X - SPACING * 3, SCREEN_HEIGHT / 2.0f, 0, 0, {255, 105, 180}, 6, false, "Pink Ball"}},
-		{"Black Ball", Ball{TRIANGLE_START_X + SPACING * 6, SCREEN_HEIGHT / 2.0f, 0, 0, {0, 0, 0}, 7, false, "Black Ball"}},
-		{"Cue Ball", Ball{SCREEN_WIDTH / 4.0f, SCREEN_HEIGHT / 2.0f, 0, 0, {255, 255, 255}, 0, false, "Cue Ball"}}
+		{"Yellow Ball", Ball{{SCREEN_WIDTH / 2.0 - 3 * SPACING, SCREEN_HEIGHT / 2.0}, 0, 0, {255, 255, 0}, 2, false, "Yellow Ball"}},
+		{"Green Ball", Ball{{SCREEN_WIDTH / 2.0 - SPACING, TABLE_MARGIN + SPACING * 2}, 0, 0, {0, 255, 0}, 3, false, "Green Ball"}},
+		{"Brown Ball", Ball{{SCREEN_WIDTH / 2.0 - SPACING, SCREEN_HEIGHT - TABLE_MARGIN - SPACING * 2}, 0, 0, {139, 69, 19}, 4, false, "Brown Ball"}},
+		{"Blue Ball", Ball{{SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0}, 0, 0, {0, 0, 255}, 5, false, "Blue Ball"}},
+		{"Pink Ball", Ball{{TRIANGLE_START_X - SPACING * 3, SCREEN_HEIGHT / 2.0}, 0, 0, {255, 105, 180}, 6, false, "Pink Ball"}},
+		{"Black Ball", Ball{{TRIANGLE_START_X + SPACING * 6, SCREEN_HEIGHT / 2.0}, 0, 0, {0, 0, 0}, 7, false, "Black Ball"}},
+		{"Cue Ball", Ball{{SCREEN_WIDTH / 4.0, SCREEN_HEIGHT / 2.0}, 0, 0, {255, 255, 255}, 0, false, "Cue Ball"}}
 	};
 
 	return balls.at(ballName);
 }
 struct Pocket {
-	float x, y;
+	Vec2d pos;
 };
 
 std::vector<Pocket> createPockets() {
 	return {
 		{TABLE_MARGIN, TABLE_MARGIN},                                  // Top-left
-		{SCREEN_WIDTH / 2.0f, TABLE_MARGIN},                          // Top-center
+		{SCREEN_WIDTH / 2.0, TABLE_MARGIN},                          // Top-center
 		{SCREEN_WIDTH - TABLE_MARGIN, TABLE_MARGIN},                  // Top-right
 		{TABLE_MARGIN, SCREEN_HEIGHT - TABLE_MARGIN},                 // Bottom-left
-		{SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - TABLE_MARGIN},          // Bottom-center
+		{SCREEN_WIDTH / 2.0, SCREEN_HEIGHT - TABLE_MARGIN},          // Bottom-center
 		{SCREEN_WIDTH - TABLE_MARGIN, SCREEN_HEIGHT - TABLE_MARGIN},  // Bottom-right
 	};
 }
@@ -63,7 +84,7 @@ void drawBall(SDL_Renderer* renderer, const Ball& ball) {
 			int dy = BALL_RADIUS - h;
 			if (dx * dx + dy * dy <= BALL_RADIUS * BALL_RADIUS) {
 				SDL_SetRenderDrawColor(renderer, ball.color.r, ball.color.g, ball.color.b, 255);
-				SDL_RenderDrawPoint(renderer, int(ball.x + dx), int(ball.y + dy));
+				SDL_RenderDrawPoint(renderer, int(ball.pos.x + dx), int(ball.pos.y + dy));
 			}
 		}
 	}
@@ -77,7 +98,7 @@ void drawPockets(SDL_Renderer* renderer, const std::vector<Pocket>& pockets) {
 				int dx = POCKET_RADIUS - w;
 				int dy = POCKET_RADIUS - h;
 				if (dx * dx + dy * dy <= POCKET_RADIUS * POCKET_RADIUS) {
-					SDL_RenderDrawPoint(renderer, int(pocket.x) + dx, int(pocket.y) + dy);
+					SDL_RenderDrawPoint(renderer, int(pocket.pos.x) + dx, int(pocket.pos.y) + dy);
 				}
 			}
 		}
@@ -85,9 +106,7 @@ void drawPockets(SDL_Renderer* renderer, const std::vector<Pocket>& pockets) {
 }
 
 bool isBallInPocket(const Ball& ball, const Pocket& pocket) {
-	float dx = ball.x - pocket.x;
-	float dy = ball.y - pocket.y;
-	return (dx * dx + dy * dy) < (POCKET_RADIUS*POCKET_RADIUS);
+	return (ball.pos - pocket.pos).squaredLength() < (POCKET_RADIUS*POCKET_RADIUS);
 }
 
 void handlePotting(Ball& ball, const std::vector<Pocket>& pockets, int& score) {
@@ -130,35 +149,30 @@ void handlePottedBalls(std::vector<Ball>& balls) {
 
 bool isMoving(const Ball& ball)
 {
-	float speedSquared = ball.vx * ball.vx + ball.vy * ball.vy;
-	if(speedSquared < 0.0001f)
-	{
+	if(ball.v.squaredLength() < 0.0001)	{
 		return false;
 	}
 	return true;
 }
 
 bool updateBall(Ball& ball) {
-	if(ball.potted || !isMoving(ball))
-	{
+	if(ball.potted || !isMoving(ball)) {
 		return false;
 	}
-	// std::cout << speedSquared << "\n";
-	ball.x += ball.vx;
-	ball.y += ball.vy;
+	// Apply velocity
+	ball.pos += ball.v;
 
 	// Apply friction
-	ball.vx *= FRICTION;
-	ball.vy *= FRICTION;
+	ball.v *= FRICTION;
 
 	// Bounce off table edges
-	if (ball.x - BALL_RADIUS < TABLE_MARGIN || ball.x + BALL_RADIUS > SCREEN_WIDTH - TABLE_MARGIN) {
-		ball.vx = -ball.vx;
-		ball.x = std::clamp(ball.x, (float)(TABLE_MARGIN + BALL_RADIUS), (float)(SCREEN_WIDTH - TABLE_MARGIN - BALL_RADIUS));
+	if (ball.pos.x - BALL_RADIUS < TABLE_MARGIN || ball.pos.x + BALL_RADIUS > SCREEN_WIDTH - TABLE_MARGIN) {
+		ball.v.x = -ball.v.x;
+		ball.pos.x = std::clamp(ball.pos.x, (double)(TABLE_MARGIN + BALL_RADIUS), (double)(SCREEN_WIDTH - TABLE_MARGIN - BALL_RADIUS));
 	}
-	if (ball.y - BALL_RADIUS < TABLE_MARGIN || ball.y + BALL_RADIUS > SCREEN_HEIGHT - TABLE_MARGIN) {
-		ball.vy = -ball.vy;
-		ball.y = std::clamp(ball.y, (float)(TABLE_MARGIN + BALL_RADIUS), (float)(SCREEN_HEIGHT - TABLE_MARGIN - BALL_RADIUS));
+	if (ball.pos.y - BALL_RADIUS < TABLE_MARGIN || ball.pos.y + BALL_RADIUS > SCREEN_HEIGHT - TABLE_MARGIN) {
+		ball.v.y = -ball.v.y;
+		ball.pos.y = std::clamp(ball.pos.y, (double)(TABLE_MARGIN + BALL_RADIUS), (double)(SCREEN_HEIGHT - TABLE_MARGIN - BALL_RADIUS));
 	}
 	return true;
 }
@@ -166,27 +180,21 @@ bool updateBall(Ball& ball) {
 void handleCollision(Ball& a, Ball& b) {
 	if(a.potted || b.potted) return;
 	if(!isMoving(a) && !isMoving(b)) return;
-	float dx = b.x - a.x;
-	float dy = b.y - a.y;
-	float distance = std::sqrt(dx * dx + dy * dy);
+	Vec2d ab = b.pos - a.pos;
 
+	double distance = std::sqrt(ab.squaredLength());
 	if (distance < BALL_RADIUS * 2) {
-		// Resolve overlap
-		float overlap = BALL_RADIUS * 2 - distance;
-		float nx = dx / distance;
-		float ny = dy / distance;
+		// Resolve overlap by backward moving both along abNorm by half the overlap.
+		double overlap = BALL_RADIUS * 2 - distance;
+		Vec2d abNorm = ab.norm();
+		a.pos -= abNorm * overlap * 0.5;
+		b.pos += abNorm * overlap * 0.5;
 
-		a.x -= nx * overlap / 2;
-		a.y -= ny * overlap / 2;
-		b.x += nx * overlap / 2;
-		b.y += ny * overlap / 2;
-
-		// Exchange velocities
-		float dotProduct = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
-		a.vx -= dotProduct * nx;
-		a.vy -= dotProduct * ny;
-		b.vx += dotProduct * nx;
-		b.vy += dotProduct * ny;
+		// Elastic Collision: When two objects collide elastically, they exchange momentum along the line of impact.
+		// The component of the relative velocity (a.v - b.v) along abNorm
+		Vec2d v = abNorm * (a.v - b.v).dot(abNorm); // scalar projection of the relative velocity onto abNorm.
+		a.v -= v; // reduces its velocity in the collision direction
+		b.v += v; // increases its velocity in the collision direction
 	}
 }
 
@@ -240,7 +248,7 @@ int main(int argc, char* argv[]) {
 	bool running = true;
 	bool aiming = false;
 	Ball* cueBall = &balls[0];
-	float aimAngle = 0.0f;
+	double aimAngle = 0.0f;
 	bool doRender = true;
 
 	while (running) {
@@ -254,10 +262,8 @@ int main(int argc, char* argv[]) {
 				}
 			} else if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
 				if (aiming) {
-					float dx = cueBall->x - event.button.x;
-					float dy = cueBall->y - event.button.y;
-					cueBall->vx = -dx * 0.005f;
-					cueBall->vy = -dy * 0.005f;
+					Vec2d offset = Vec2d{double(event.button.x), double(event.button.y)} - cueBall->pos;
+					cueBall->v = offset * 0.005;
 					aiming = false;
 				}
 			}
