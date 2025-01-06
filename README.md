@@ -1,6 +1,6 @@
 # Pong with SDL
 
-Minimalistic implementation of pong with SDL. This project is using cmake and vcpkg.
+Minimalistic implementation of snooker with SDL. This project is using cmake and vcpkg.
 
 ## Setup
 
